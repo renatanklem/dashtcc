@@ -1,0 +1,1461 @@
+---
+title: "Quedas de Árvores na Cidade do Rio de Janeiro e Clima (maio/2015 a jan/2024)"
+author: "Renata do Nascimento Klem¹; Walter Mesquita Filho²"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: row
+    vertical_layout: scroll
+    source_code: embed
+    social: menu
+    logo: favicon_tree 8x8 pixel (2).png
+    favicon: favicon_tree 8x8 pixel.png
+    theme: "yeti"    
+---
+
+```{r global, include=FALSE}
+library(flexdashboard)
+library(tidyverse)
+library(dplyr)
+library(DT)
+library(lubridate)
+library(sf)
+library(leaflet)
+library(leaflet.extras)
+library(leaflet.extras2)
+library(htmlwidgets)
+library(htmltools)
+library(viridis)
+library(bslib)
+library(mapview)
+library(ggplot2)
+library(spatstat)
+library(readr)
+
+#Lendo os dados
+data <- read_csv("quedas_arvores_alerta_rio_inmet_final.csv")
+dados_arvores<-data
+dados_arvores$descricao <- toupper(dados_arvores$descricao)#Colocando em maiuscúlas
+
+# Convertendo as colunas para numérico e arredondando
+dados_arvores$longitude <- round(as.numeric(dados_arvores$longitude),8)
+dados_arvores$latitude <- round(as.numeric(dados_arvores$latitude),8)
+
+library(dplyr)
+
+dados_arvores<- dplyr::select(dados_arvores,-...1 ,-id_pop, -Hora_formatada,-chave_primaria,-DATA,-HORA,-data_hora_arredondada,-primary_key,-Hora_formatada,-chave_primaria,-					'PREC_TOTAL_HOR(mm)')
+
+dados_arvores<- dados_arvores %>% rename(acumulado_chuva_15_min = "15 min",
+					acumulado_chuva_1_h = "01 h",
+					acumulado_chuva_4_h = "04 h",
+					acumulado_chuva_24_h = "24 h",
+					acumulado_chuva_96_h = "96 h",
+					pres_atm_niv_est_hor_mB = "PRES_ATM_NIVEL_ ESTAC_ HOR(mB)",
+				        pres_atm_max_h_ant_mB = "PRES_ATM_MAX_ HORA_ANT(AUT)(mB)",
+					pres_atm_min_h_ant_mB = "PRES_ATM_MIN_ HORA_ANT(AUT)(mB)",
+					temp_ar_bulbo_seco_hor_gC = "TEMP_AR_BULBO_SECO_HORARIA(gC)",
+					temp_ponto_orv_gC = "TEMP_PONTO_ORVAL(gC)",
+                                        temp_max_h_ant_gC = "TEMP_ MAX_HORA_ANT(AUT)(gC)",
+					temp_min_h_ant_gC = "TEMP_ MIN_HORA_ANT(AUT)(gC)",
+				        temp_orv_max_h_ant_gC = "TEMP_ORV_MAX__HORA_ANT(AUT)(gC)",
+					temp_orv_min_h_ant_gC = "TEMP_ORV_MIN__HORA_ANT(AUT)(gC)",
+					umid_rel_max_h_ant_perc = "UMID_REL_MAX_HORA_ANT(AUT)(%)",
+                                        umid_rel_min_h_ant_perc = "UMID_REL_MIN_HORA_ANT (AUT)(%)",
+                                        umic_rel_ar_h_perc = "UMID_RELAT_AR_HOR(%)",
+					vento_dir_h_gr = "VENTO_DIR_HOR(gr)",
+			                rajada_vento_maxima_.m.s.= "VENTO_RAJADA_MAX(m/s)",
+				        vento_vel_horaria.m.s.= "VENTO_VELOC_HOR(m/s)",
+					classificacao_direcao_vento= "direcao_ventos_cardinais",
+                                        vento_escala_Beaufort= "vento_escala_Beaufort",
+                                        estacao_do_ano = "Estacao_ano")
+
+
+#Definindo os tipos de variáveis
+dados_arvores$data_inicio <- as.Date(dados_arvores$data_inicio)
+dados_arvores$area_plane <- as.factor(dados_arvores$area_plane)
+dados_arvores$usoagregadosolo <- as.factor(dados_arvores$usoagregadosolo)
+dados_arvores$regiao_adm <- as.factor(dados_arvores$regiao_adm)
+dados_arvores$grupousodosolo <- as.factor(dados_arvores$grupousodosolo)
+dados_arvores$anosodosolo <- as.factor(dados_arvores$anosodosolo)
+dados_arvores$shi_nm <- as.factor(dados_arvores$shi_nm)
+dados_arvores$shi_nm_mac <- as.factor(dados_arvores$shi_nm_mac)
+dados_arvores$est_alertario <- as.factor(dados_arvores$est_alertario)
+dados_arvores$cod_alertario <- as.factor(dados_arvores$cod_alertario)
+dados_arvores$cod_alertario <- as.factor(dados_arvores$cod_alertario)
+dados_arvores$est_inmet <- as.factor(dados_arvores$est_inmet)
+
+dados_arvores$vento_escala_Beaufort <- as.factor(dados_arvores$vento_escala_Beaufort)
+dados_arvores$classificacao_intensidade_chuva_1_h <- as.factor(dados_arvores$classificacao_intensidade_chuva_1_h)
+dados_arvores$classificacao_direcao_vento <- as.factor(dados_arvores$classificacao_direcao_vento)
+
+#Formatando as variáveis numéricas que tem casas decimais
+dados_arvores$acumulado_chuva_15_min <- as.double(round(dados_arvores$acumulado_chuva_15_min,digits=2))            
+dados_arvores$acumulado_chuva_1_h <- as.double(round(dados_arvores$acumulado_chuva_1_h,digits=2))              
+dados_arvores$acumulado_chuva_4_h <- as.double(round(dados_arvores$acumulado_chuva_4_h,digits=2))               
+dados_arvores$acumulado_chuva_24_h <- as.double(round(dados_arvores$acumulado_chuva_24_h,digits=2))               
+dados_arvores$acumulado_chuva_96_h <- as.double(round(dados_arvores$acumulado_chuva_96_h,digits=2))
+dados_arvores$pres_atm_niv_est_hor_mB <- as.double(round(dados_arvores$pres_atm_niv_est_hor_mB,digits=2))
+dados_arvores$pres_atm_max_h_ant_mB <- as.double(round(dados_arvores$pres_atm_max_h_ant_mB,digits=2))              
+dados_arvores$pres_atm_min_h_ant_mB <- as.double(round(dados_arvores$pres_atm_min_h_ant_mB,digits=2))            
+dados_arvores$temp_ar_bulbo_seco_hor_gC <- as.double(round(dados_arvores$temp_ar_bulbo_seco_hor_gC,digits=2))
+dados_arvores$temp_ponto_orv_gC <- as.double(round(dados_arvores$temp_ponto_orv_gC,digits=2))
+dados_arvores$temp_max_h_ant_gC <- as.double(round(dados_arvores$temp_max_h_ant_gC,digits=2))
+dados_arvores$temp_min_h_ant_gC <- as.double(round(dados_arvores$temp_min_h_ant_gC,digits=2))
+dados_arvores$temp_orv_max_h_ant_gC <- as.double(round(dados_arvores$temp_orv_max_h_ant_gC,digits=2))
+dados_arvores$temp_orv_min_h_ant_gC <- as.double(round(dados_arvores$temp_orv_min_h_ant_gC,digits=2))
+dados_arvores$umid_rel_max_h_ant_perc <- as.double(round(dados_arvores$umid_rel_max_h_ant_perc,digits=2))
+dados_arvores$umid_rel_min_h_ant_perc <- as.double(round(dados_arvores$umid_rel_min_h_ant_perc,digits=2))
+dados_arvores$umic_rel_ar_h_perc <- as.double(round(dados_arvores$umic_rel_ar_h_perc,digits=2))
+dados_arvores$vento_dir_h_gr <- as.double(round(dados_arvores$vento_dir_h_gr,digits=2))
+dados_arvores$rajada_vento_maxima_.m.s. <- as.double(round(dados_arvores$rajada_vento_maxima_.m.s.,digits=2))
+dados_arvores$vento_vel_horaria.m.s. <- as.double(round(dados_arvores$vento_vel_horaria.m.s.),digits=2)
+
+# Extraindo o ano e crie uma nova coluna chamada `ano` e mes
+dados_arvores$ano <- year(dados_arvores$data_inicio)
+
+dados_arvores$mes <- month(dados_arvores$data_inicio)
+dados_arvores <- dados_arvores %>%
+    mutate(mes_abrev = factor(month.abb[mes], levels = month.abb))
+
+
+# Convertendo o data.frame para um objeto 'sf' (Spatial DataFrame)
+dados_arvores_sf <- st_as_sf(dados_arvores, coords = c("longitude", "latitude"), crs = 4326,remove = FALSE)
+
+total_quedas <- nrow(dados_arvores)
+
+bairros<-sf::st_read("Limite_de_Bairros.shp")
+bairros_transf <- st_transform(bairros,4326)
+
+subbacia<-sf::st_read("Sub_Bacias_Hidrograficas.shp")
+subbacia_transf <- st_transform(subbacia,4326)
+
+macrobacia_transf <- subbacia_transf %>%
+  group_by(shi_nm_mac) %>%  # Substitua ID_MacroBacia pela coluna relevante
+  summarize(geometry = st_union(geometry))
+
+
+limite_AP<-sf::st_read("Limite_AP.shp")
+limite_AP_transf <- st_transform(limite_AP,4326)
+
+
+limite<-sf::st_read("Limite_do_Municipio_do_Rio_de_Janeiro.shp")
+limite_transf <- st_transform(limite,4326)
+
+
+#Contando a quantidade de quedas de árvores por quadrante - Q**
+### Instalando os pacotes
+library(spatstat)
+library(sf)
+
+### **Convertendo dados_arvores_proj de ponto em um pppobjeto**
+#O spatstatpacote é atualmente projetado para trabalhar com sistema de coordenadas projetadas (planares). Se você tentar converter um objeto de ponto que esteja em um sistema de coordenadas geográficas dá erro:
+
+# Criar um objeto sf com as coordenadas das árvores (assumindo que a coluna que contém as coordenadas é chamada "longitude" e "latitude")
+dados_arvores_sf <- st_as_sf(dados_arvores, coords = c("longitude", "latitude"), crs = 4326,remove= FALSE)
+
+# Verificar o sistema de coordenadas atual dos dados das árvores
+st_crs(dados_arvores_sf)
+
+# Projetar os dados das árvores para o sistema de coordenadas do mapa (SIRGAS 2000 / UTM zone 23S)
+dados_arvores_proj <- st_transform(dados_arvores_sf, crs = 31983)
+
+#Análise padrões pontuais
+# dados_arvores_proj de ponto em um pppobjeto
+dados_arvores_proj.ppp <- as.ppp(dados_arvores_proj)
+
+# Convertendo dados_arvores_proj de ponto em um pppobjeto
+
+# Importar o mapa da cidade do Rio de Janeiro usando a biblioteca 'sf'
+mapa_rio <- st_read("Limite_de_Bairros.shp")
+
+# Projetar os dados das árvores para o sistema de coordenadas do mapa (SIRGAS 2000 / UTM zone 23S)
+mapa_rio_proj <- st_transform(mapa_rio, crs = 31983)
+
+mapa_rio.owin <- as.owin(mapa_rio_proj)
+
+marks(dados_arvores_proj.ppp)  <- NULL
+
+Window(dados_arvores_proj.ppp) <- mapa_rio.owin
+
+#Plotando a window
+#plot(mapa_rio.owin, col="blue")
+
+#Contagem de quadrats
+Q <- quadratcount(dados_arvores_proj.ppp, nx=12, ny=9)
+
+# Intensidade média em cada quadrante
+#Densidade de pontos dentro de cada quadrat
+Q.d <- intensity(Q)
+
+L<-intensity(Q,image=TRUE)
+
+#Teste de Monte Carlo
+
+#Muitas vezes, deseja-se detectar anomalias na intensidade de um processo pontual. Um ponto quente em um processo pontual é uma zona de intensidade elevada.
+#dados_arvores_proj.km <- rescale(dados_arvores_proj.ppp, 1000, "km")
+#denRed.km2 <- density(dados_arvores_proj.km, bw.ppl, ns=16)
+
+#Para determinar se tal zona é 'significativa', podemos usar um teste de Monte Carlo:
+#obsmax <- max(denRed.km2)
+#simmax <- numeric(99)
+#lamRed <- intensity(dados_arvores_proj.km)
+#winRed <- as.owin(dados_arvores_proj.km)
+#for(i in 1:99) {
+#Xsim <- rpoispp(lamRed, win=winRed)
+#denXsim <- density(Xsim, bw.ppl, ns=16)
+#simmax[i] <- max(denXsim)
+
+#}
+#(pval <- (1+sum(simmax > obsmax))/100)
+
+```
+
+# Análise Descritiva {data-icon="ion-stats-bars"}
+
+## Row {data-height="100"}
+
+### **Total de quedas** {width="50"}
+
+```{r}
+
+# Cria o value box
+total_quedas <- nrow(dados_arvores)
+valueBox(total_quedas, icon="ion-leaf")
+
+```
+
+### **Número de dias que ocorreram quedas** {width="50"}
+
+```{r}
+
+# Converte as datas para o formato correto
+dados_arvores$data_inicio <- as.Date(dados_arvores$data_inicio, format = "%d/%m/%Y")
+
+# Agrupa por data e conta o número de dias únicos com quedas
+numero_de_dias_com_quedas <- dados_arvores %>%
+  group_by(data_inicio) %>%
+  summarise(quantidade = n()) %>%
+  nrow()
+
+# Cria o value box
+  valueBox(numero_de_dias_com_quedas, icon = "ion-android-calendar")
+
+```
+
+### **Média de quedas por dia** {width="50"}
+
+```{r}
+
+# Cria o value box
+media_diaria=round(total_quedas/(numero_de_dias_com_quedas),2)
+
+valueBox(media_diaria, icon = "ion-calculator")
+
+```
+
+## Row {.tabset .tabset-fade data-height="500"}
+
+### **Mapa de localização das ocorrências**
+
+```{r}
+library(leaflet.providers)
+library(leaflet)
+library(leaflet.extras)
+library(dplyr)
+
+# Convertendo o data.frame para um objeto 'sf' (Spatial DataFrame)
+  
+dados_arvores_sf <- st_as_sf(dados_arvores, coords = c("longitude", "latitude"), crs = 4326,remove = FALSE)
+x_min= min(dados_arvores_sf$longitude)
+x_max = max(dados_arvores_sf$longitude)
+x_medio= (x_min+x_max)/2
+
+y_min= min(dados_arvores_sf$latitude)
+y_max = max(dados_arvores_sf$latitude)
+y_medio= (y_min+y_max)/2
+
+# Criando o mapa
+  dados_arvores_sf %>% leaflet() %>% 
+    addProviderTiles("CartoDB.VoyagerLabelsUnder")%>%
+    setView(x_medio, y_medio, zoom = 10) %>%
+    addTiles() %>%
+    addCircleMarkers(~longitude, ~latitude,
+                     radius = 1.2,
+                     color = "royalblue",
+                     fill = FALSE,
+                     fillColor = "royalblue",
+                     fillOpacity = 0.8,
+                     popup = ~descricao) %>%
+    addDrawToolbar() %>%
+    addMiniMap(width = 150, height = 150) %>%
+    addMeasure(
+    position = "bottomleft",
+    primaryLengthUnit = "meters",
+    primaryAreaUnit = "sqmeters",
+    activeColor = "#3D535D",
+    completedColor = "#7D4479")
+
+```
+
+### **Mapa dos clusters de ocorrências**
+
+```{r}
+library(leaflet.providers)
+library(leaflet)
+library(leaflet.extras)
+library(dplyr)
+
+# Convertendo o data.frame para um objeto 'sf' (Spatial DataFrame)
+  
+dados_arvores_sf <- st_as_sf(dados_arvores, coords = c("longitude", "latitude"), crs = 4326,remove = FALSE)
+
+# Criando o mapa
+  dados_arvores_sf %>% leaflet() %>% 
+  addProviderTiles("CartoDB.VoyagerLabelsUnder")%>%
+    setView(x_medio, y_medio, zoom = 10) %>%
+    addTiles() %>%
+    addCircleMarkers(~longitude, ~latitude,
+                     radius = 1.2,
+                     color = "royalblue",
+                     fill = FALSE,
+                     fillColor = "royalblue",
+                     fillOpacity = 0.8,
+                     popup = ~descricao,
+                     clusterOptions = markerClusterOptions()) 
+
+```
+
+### **Tabela de dados das ocorrências de quedas de árvores**
+
+```{r}
+library(dplyr)
+library(DT)
+
+DT::datatable(dados_arvores)
+```
+
+### **Estatística descritiva univarida das variáveis numéricas**
+
+```{r}
+library(dplyr)
+library(DT)
+library(e1071)
+
+
+# Função para calcular a moda
+calc_moda <- function(x) {
+  ux <- unique(x)
+  ux[which.max(tabulate(match(x, ux)))]
+}
+
+# Função para calcular estatísticas descritivas
+
+calc_estatisticas <- function(x) {
+  c(
+    minima = round(min(x, na.rm = TRUE),2),
+    media = round(mean(x, na.rm = TRUE),2),
+    mediana = round(median(x, na.rm = TRUE),2),
+    moda = round(calc_moda(x),2),
+    Q1 = round(quantile(x, 0.25, na.rm = TRUE),2),
+    Q3 = round(quantile(x, 0.75, na.rm = TRUE),2),
+    maxima = round(max(x, na.rm = TRUE),2),
+    amplitude = round(max(x, na.rm = TRUE) - min(x, na.rm = TRUE),2),
+    variancia = round(var(x, na.rm = TRUE),2),
+    desvio_padrao = round(sd(x, na.rm = TRUE),2),
+    erro_padrao = round(sd(x, na.rm = TRUE) / sqrt(sum(!is.na(x))),2),
+    coef_variacao = round(sd(x, na.rm = TRUE) / mean(x, na.rm = TRUE),2),
+    assimetria <- round(skewness(x, na.rm = TRUE),2),
+    curtose <- round(kurtosis(x, na.rm = TRUE),2)
+    
+  )
+}
+
+   dados_numericos <- select_if(dados_arvores, is.numeric)
+   dados_numericos <- dplyr::select(dados_numericos, -vento_dir_h_gr, -ano, -mes,-id_evento, -codra, -latitude, -longitude)
+   estatisticas_descritivas <- dados_numericos %>% summarise_all(calc_estatisticas) 
+   estatisticas_descritivas$estatisticas <- c("minima","media","mediana","moda","Q1","Q3","maxima","amplitude","variancia","desvio_padrao","erro_padrao","coef_variacao","assimetria", "curtose")
+   estatisticas_descritivas <- dplyr::select(estatisticas_descritivas,
+                                             estatisticas, everything())
+   datatable(estatisticas_descritivas)
+
+```
+
+### **Estatística descritiva bivariada das variáveis numéricas - Correlação**
+
+```{r}
+# Carregar os pacotes necessários
+library(dplyr)
+library(DT)
+library(corrplot)
+library(GGally)
+
+# Criar um correlograma
+# Calcular a matriz de correlação
+matriz_correlacao <- cor(dados_numericos, use = "complete.obs")
+
+# Usar corrplot para visualizar a matriz de correlação
+corrplot::corrplot(matriz_correlacao, method = "color", type = "upper", order = "hclust",
+                   tl.col = "black", tl.srt = 45, tl.cex = 0.6, cl.cex = 0.6, 
+                   addCoef.col = "black", number.cex = 0.5)
+ 
+
+```
+
+### **Estatística descritiva bivariada das variáveis qualitativas - Associação (Teste Qui Quadrado)**
+
+```{r}
+# Carregar as bibliotecas necessárias
+library(vcd)
+library(DT)
+library(dplyr)
+
+# Selecionar apenas variáveis qualitativas (fatores)
+dados_qualitativos <- dados_arvores %>% 
+                      select_if(is.factor)
+
+teste_qui_quadrado <- function(var1, var2) {
+    tab <- table(var1, var2)
+    teste <- chisq.test(tab)
+    return(c(teste$statistic, teste$p.value))
+}
+
+resultados <- matrix(NA, ncol = 3, nrow = 0)
+colnames(resultados) <- c("Var1", "Var2", "pvalue")
+
+for (i in 1:(ncol(dados_qualitativos) - 1)) {
+    for (j in (i + 1):ncol(dados_qualitativos)) {
+        if (is.factor(dados_qualitativos[[i]]) && is.factor(dados_qualitativos[[j]])) {
+            res <- teste_qui_quadrado(dados_qualitativos[[i]], dados_qualitativos[[j]])
+            resultados <- rbind(resultados, c(colnames(dados_qualitativos)[i], colnames(dados_qualitativos)[j], res[2]))
+        }
+    }
+}
+
+resultados_df <- as.data.frame(resultados, stringsAsFactors = FALSE)
+resultados_df$pvalue <- round(as.numeric(as.character(resultados_df$pvalue)), 6)
+
+# Definir o limite de significância
+limite_p_valor <- 0.05
+
+# Adicionar a coluna de classificação
+resultados_df$associacao_significativa <- ifelse(resultados_df$pvalue < limite_p_valor, "Sim", "Não")
+
+  datatable(resultados_df)
+
+```
+
+### **Tabela de quedas por tipo de grupo de uso do solo**
+
+```{r}
+library(knitr)
+library(kableExtra)
+
+tabela_uso_solo <- as.data.frame(table(dados_arvores$usoagregadosolo))
+  tabela_uso_solo <- tabela_uso_solo %>% rename("Uso do solo" = "Var1",
+                                                "Frequencia"= "Freq")
+  DT::datatable(tabela_uso_solo)                     
+             
+```
+
+
+
+
+## row {.tabset .tabset-fade}
+
+### **Gráfico de quedas por dia**
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(plotly)
+
+# Adiciona uma coluna com a data e converte para o formato de data
+  dados_arvores <- dados_arvores %>%
+    mutate(data_inicio = as.Date(data_inicio, format = "%Y-%m-%d")) 
+
+# Calcula a quantidade de quedas por dia
+  media_quedas_por_dia <- dados_arvores %>%
+    group_by(data_inicio) %>%
+    summarise(quantidade = n(), .groups = 'drop') %>%
+    mutate(media = round(mean(quantidade), 2))
+
+  # Criação do gráfico
+  ggplotly(
+  ggplot(data = media_quedas_por_dia, aes(x = data_inicio, y = quantidade)) +
+    geom_bar(stat = 'identity', position = position_dodge(),fill= "royalblue") +
+    geom_hline(aes(yintercept = media), linetype="dashed", color = "red") +
+    labs(title = "Quantidade de quedas por dia",
+         x = "Data",
+         y = "Quantidade",
+         caption = "Período: Maio/2015 a Jan/2024") +
+    theme_classic() +
+    theme(text = element_text(size = 12))
+  )
+
+```
+
+
+### **Gráfico de quedas por mês**
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(plotly)
+
+# Adiciona uma coluna com os nomes abreviados dos meses e converte para fator na ordem correta
+  dados_arvores <- dados_arvores %>%
+    mutate(mes_abrev = factor(month.abb[mes], levels = month.abb))
+
+  # Calcula a média de quedas por mês
+  media_quedas_por_mes <- dados_arvores %>%
+    group_by(mes_abrev) %>%
+    summarise(quantidade = n(), .groups = 'drop') %>%
+    mutate(media = round(mean(quantidade), 2))
+
+  # Criação do gráfico
+  ggplotly(
+  ggplot(data = media_quedas_por_mes, aes(x = mes_abrev, y = quantidade)) +
+    geom_bar(stat = 'identity', position = position_dodge(),fill= "royalblue") +
+    geom_hline(aes(yintercept = media), linetype="dashed", color = "red") +
+    labs(title = "Quantidade de Quedas por Mes",
+         x = "Mês",
+         y = "Quantidade",
+         caption = "Período: Maio/2015 a Jan/2024") +
+    theme_classic() +
+    theme(text = element_text(size = 12))
+  )
+```
+
+### **Gráfico de quedas por mês por ano**
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(plotly)
+
+# Adiciona uma coluna com os nomes abreviados dos meses e converte para fator na ordem correta
+  dados_arvores <- dados_arvores %>%
+    mutate(mes_abrev = factor(month.abb[mes], levels = month.abb, ordered = TRUE)) %>%
+    mutate(ano = as.factor(ano))
+
+  # Calcula a quantidade de quedas por mês e ano
+  quedas_por_mes_e_ano <- dados_arvores %>%
+    mutate(mes_abrev = factor(month.abb[mes], levels = month.abb, ordered = TRUE)) %>%
+    group_by(mes_abrev, ano) %>%
+    summarise(quantidade = n(), .groups = 'drop') %>% 
+    mutate(media = round(mean(quantidade), 2))   # Calcula a média de quedas por estação do ano e ano
+
+
+  # Criação do gráfico com meses abreviados e separação por ano
+  ggplotly(
+  ggplot(data = quedas_por_mes_e_ano, aes(x = mes_abrev, y = quantidade, fill = ano)) +
+    geom_bar(stat = "identity", position = position_dodge()) +
+    geom_hline(aes(yintercept = media), linetype="dashed", color = "red") +
+    labs(title = "Quantidade de Quedas por Mês por Ano",
+         x = "Mês",
+         y = "Quantidade",
+         caption = "Período: Maio/2015 a Jan/2024") +
+    theme_classic() +
+    theme(text = element_text(size = 12))
+  )
+
+```
+
+### **Gráfico de quedas por ano**
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(plotly)
+
+# Calcula a média de quedas por ano
+  media_quedas_ano <- dados_arvores %>%
+    group_by(ano) %>%
+    summarise(quantidade = n(), .groups = 'drop') %>%
+    mutate(media = round(mean(quantidade), 2))
+
+  # Assegura que 'ano' é tratado como um fator para exibição categórica
+  media_quedas_ano$ano <- factor(media_quedas_ano$ano)
+
+  # Criação do gráfico
+  p <- ggplot(data = media_quedas_ano, aes(x = ano, y = quantidade)) +
+    geom_bar(stat = 'identity', fill= "royalblue") + # Removed position_dodge() for simplicity
+    geom_hline(aes(yintercept = media), linetype="dashed", color = "red") +
+    scale_x_discrete(name = "Ano") + # Assegura que o eixo x trata 'ano' como discreto
+    labs(title = "Quantidade de Quedas por Ano",
+         x = "Ano",
+         y = "Quantidade",
+         caption = "Período: Maio/2015 a Jan/2024") +
+    theme_classic() +
+    theme(text = element_text(size = 12))
+
+  ggplotly(p)
+
+```
+
+### **Gráfico de quedas por estação do ano**
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(plotly)
+
+# Adiciona a estação do ano como fator na ordem correta
+  dados_arvores <- dados_arvores %>%
+    mutate(estacao_do_ano = factor(estacao_do_ano, levels = c("Outono", "Inverno", "Primavera", "Verao"))) 
+  
+  # Calcula a média de quedas por estação do ano e ano
+  media_quedas_por_estacao <- dados_arvores %>%
+    group_by(estacao_do_ano) %>%
+    summarise(quantidade = n(), .groups = 'drop') %>%
+    mutate(media = round(mean(quantidade), 2))
+
+  # Criação do gráfico
+  p <- ggplot(data = media_quedas_por_estacao, aes(x = estacao_do_ano, y = quantidade)) +
+    geom_bar(stat = 'identity', position = position_dodge(),fill= "royalblue") +
+    geom_hline(aes(yintercept = media), linetype="dashed", color = "red") +
+    labs(title = "Quantidade de Quedas por Estação do Ano",
+         x = "Estação do Ano",
+         y = "Quantidade",
+         caption = "Período: Maio/2015 a Jan/2024") +
+    theme_classic() +
+    theme(text = element_text(size = 12))
+
+  ggplotly(p)
+```
+
+### **Gráfico de quedas por estação do ano por ano**
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(plotly)
+
+# Adiciona a estação do ano como fator na ordem correta
+  dados_arvores <- dados_arvores %>%
+    mutate(Est = factor(estacao_do_ano, levels = c("Outono", "Inverno", "Primavera", "Verao"))) %>% 
+    mutate(ano = as.factor(ano))
+
+  # Calcula a média de quedas por estação do ano e ano
+  media_quedas_por_estacao_e_ano <- dados_arvores %>%
+    group_by(estacao_do_ano, ano) %>%
+    summarise(quantidade = n(), .groups = 'drop') %>%
+    mutate(media = round(mean(quantidade), 2))
+
+  # Criação do gráfico
+  p <- ggplot(data = media_quedas_por_estacao_e_ano, aes(x = estacao_do_ano, y = quantidade, fill = ano)) +
+    geom_bar(stat = 'identity', position = position_dodge()) +
+    geom_hline(aes(yintercept = media), linetype="dashed", color = "red") +
+    labs(title = "Quantidade de Quedas por Estação do Ano e Ano",
+         x = "Estação do Ano",
+         y = "Quantidade",
+         caption = "Período: Maio/2015 a Jan/2024") +
+    theme_classic() +
+    theme(text = element_text(size = 12))
+
+  ggplotly(p)
+```
+
+# Análise dos dados de chuva {data-navmenu="Análise dos dados meteorológicos" data-navmenu-icon="ion-ios-thunderstorm-outline" data-icon="ion-ios-rainy-outline"}
+
+## Row {.tabset .tabset-fade data-height="500"}
+
+### **Acumulado de chuva em 15 min**
+
+```{r}
+#acumulado_chuva_15_min_max_dia
+library(ggplot2)
+library(plotly)
+
+
+#Pegando os dados filtrados e arredondando os valores
+dados_arvores$acumulado_chuva_15_min <- round(dados_arvores$acumulado_chuva_15_min,2)
+
+  # Cálculo da média
+media_acumulado_chuva_15_min <- round(mean(dados_arvores$acumulado_chuva_15_min), 2)
+
+ggplotly(
+  ggplot(data = dados_arvores, aes(x = data_inicio, y = acumulado_chuva_15_min)) +
+    geom_line(color = "royalblue") +
+    geom_hline(yintercept = media_acumulado_chuva_15_min, linetype = "dashed", color = "red") +
+    labs(title = "Acumulado de Chuva 15 minutos",
+         x = "Data",
+         y = "Acumulado de Chuva (mm)",
+         caption = paste("Período: Maio/2015 a Janeiro/2024 - Média de Chuva:", media_acumulado_chuva_15_min)) +
+    theme_classic()+
+    theme(text = element_text(size = 12))
+)
+
+```
+
+### **Histograma de acumulado de chuva em 15 min**
+
+```{r}
+library(ggplot2)
+library(plotly)
+#acumulado_chuva_15_min
+
+# Histograma com cores para diferentes categorias com sobreposição
+
+ggplotly(
+ggplot(dados_arvores, aes(x = acumulado_chuva_15_min)) +
+  geom_histogram(binwidth = 1, fill = "royalblue", color = "white") +
+  theme_classic() +
+  labs(title = "Histograma do acumulado de chuva em 15 min",
+       x = "Acumulado de chuva em 15 min (m)",
+       y = "Frequência") +
+  theme(text = element_text(size = 12))
+)
+
+```
+
+### **Acumulado de chuva em 1 h**
+
+```{r}
+library(ggplot2)
+library(plotly)
+
+dados_arvores$acumulado_chuva_1_h <- round(dados_arvores$acumulado_chuva_1_h,2)
+
+  # Cálculo da média
+  media_acumulado_chuva_1_h <- round(mean(dados_arvores$acumulado_chuva_1_h), 2)
+ggplotly(
+  ggplot(data = dados_arvores, aes(x = data_inicio, y = acumulado_chuva_1_h)) +
+    geom_line(color = "royalblue") +
+    geom_hline(yintercept = media_acumulado_chuva_1_h, linetype = "dashed", color = "red") +
+    labs(title = "Acumulado de Chuva 1 h",
+         x = "Data",
+         y = "Acumulado de Chuva (mm)",
+         caption = paste("Período: Maio/2015 a Janeiro/2024 - Média de Chuva:", media_acumulado_chuva_1_h)) +
+    theme_classic()+
+    theme(text = element_text(size = 12))
+)
+```
+
+### **Histograma de acumulado de chuva em 1 h**
+
+```{r}
+library(ggplot2)
+library(plotly)
+#acumulado_chuva_1_h
+
+# Histograma
+ggplotly(
+ggplot(dados_arvores, aes(x = acumulado_chuva_1_h)) +
+  geom_histogram(binwidth = 1, fill = "royalblue", color = "white") +
+  theme_classic() +
+  labs(title = "Histograma do acumulado de chuva em 1 h",
+       x = "Acumulado de chuva em 1 h (mm)",
+       y = "Frequência") +
+  theme(text = element_text(size = 12))
+)
+```
+
+### **Acumulado de chuva em 4 h**
+
+```{r}
+#acumulado_chuva_4_h_max_dia
+library(ggplot2)
+library(plotly)
+
+#acumulado_chuva_15_min_max_dia
+library(ggplot2)
+library(plotly)
+
+
+#Pegando os dados filtrados e arredondando os valores
+dados_arvores$acumulado_chuva_4_h <- round(dados_arvores$acumulado_chuva_4_h,2)
+
+  # Cálculo da média
+media_acumulado_acumulado_chuva_4_h <- round(mean(dados_arvores$acumulado_chuva_4_h), 2)
+
+ggplotly(
+  ggplot(data = dados_arvores, aes(x = data_inicio, y = acumulado_chuva_4_h)) +
+    geom_line(color = "royalblue") +
+    geom_hline(yintercept = media_acumulado_acumulado_chuva_4_h, linetype = "dashed", color = "red") +
+    labs(title = "Acumulado de Chuva 4 h",
+         x = "Data",
+         y = "Acumulado de Chuva (mm)",
+         caption = paste("Período: Maio/2015 a Janeiro/2024 - Média de Chuva:", media_acumulado_acumulado_chuva_4_h)) +
+    theme_classic()+
+    theme(text = element_text(size = 12))
+)
+
+```
+
+### **Histograma de acumulado de chuva em 4 h**
+
+```{r}
+library(ggplot2)
+library(plotly)
+#acumulado_chuva_4_h
+
+# Histograma
+ggplotly(
+ggplot(dados_arvores, aes(x = acumulado_chuva_4_h)) +
+  geom_histogram(binwidth = 1, fill = "royalblue", color = "white") +
+  theme_classic() +
+  labs(title = "Histograma do acumulado de chuva em 4 h",
+       x = "Acumulado de chuva em 4 h (mm)",
+       y = "Frequência") +
+  theme(text = element_text(size = 12))
+)
+```
+
+### **Acumulado de chuva em 24 h**
+
+```{r}
+#acumulado_chuva_24_h_max_dia
+library(ggplot2)
+library(plotly)
+
+
+dados_arvores$acumulado_chuva_24_h <- round(dados_arvores$acumulado_chuva_24_h,2)
+
+# Cálculo da média
+  media_acumulado_chuva_24_h <- round(mean(dados_arvores$acumulado_chuva_24_h), 2)
+ggplotly(
+  ggplot(data = dados_arvores, aes(x = data_inicio, y = acumulado_chuva_24_h)) +
+    geom_line(color = "royalblue") +
+    geom_hline(yintercept = media_acumulado_chuva_24_h, linetype = "dashed", color = "red") +
+    labs(title = "Acumulado de Chuva 24 h",
+         x = "Data",
+         y = "Acumulado de Chuva (mm)",
+         caption = paste("Período: Maio/2015 a Janeiro/2024 - Média de Chuva:", media_acumulado_chuva_24_h)) +
+    theme_classic() +
+    theme(text = element_text(size = 12))
+
+)
+```
+
+### **Histograma de acumulado de chuva em 24 h**
+
+```{r}
+library(ggplot2)
+library(plotly)
+#acumulado_chuva_24_h
+
+# Histograma
+ggplotly(
+ggplot(dados_arvores, aes(x = acumulado_chuva_24_h)) +
+  geom_histogram(binwidth = 1, fill = "royalblue", color = "white") +
+  theme_classic() +
+  labs(title = "Histograma do acumulado de chuva em 24 h",
+       x = "Acumulado de chuva em 24 h (mm)",
+       y = "Frequência") +
+  theme(text = element_text(size = 12))
+)
+```
+
+### **Acumulado de chuva em 96 h**
+
+```{r}
+#acumulado_chuva_96_h_max_dia
+library(ggplot2)
+library(plotly)
+
+dados_arvores$acumulado_chuva_96_h <- round(dados_arvores$acumulado_chuva_96_h,2)
+
+  # Cálculo da média
+  media_acumulado_chuva_96_h <- round(mean(dados_arvores$acumulado_chuva_96_h), 2)
+ggplotly(
+  ggplot(data = dados_arvores, aes(x = data_inicio, y = acumulado_chuva_96_h)) +
+    geom_line(color = "royalblue") +
+    geom_hline(yintercept = media_acumulado_chuva_96_h, linetype = "dashed", color = "red") +
+    labs(title = "Acumulado de Chuva 96 h",
+         x = "Data",
+         y = "Acumulado de Chuva (mm)",
+         caption = paste("Período: Maio/2015 a Janeiro/2024 - Média de Chuva:", media_acumulado_chuva_96_h)) +
+    theme_classic() +
+    theme(text = element_text(size = 12))
+
+)
+```
+
+### **Histograma de acumulado de chuva em 96 h**
+
+```{r}
+library(ggplot2)
+library(plotly)
+#acumulado_chuva_96_h
+
+# Histograma
+ggplotly(
+ggplot(dados_arvores, aes(x = acumulado_chuva_96_h)) +
+  geom_histogram(binwidth = 1, fill = "royalblue", color = "white") +
+  theme_classic() +
+  labs(title = "Histograma do acumulado de chuva em 96 h",
+       x = "Acumulado de chuva em 96 h (mm)",
+       y = "Frequência") +
+  theme(text = element_text(size = 12))
+)
+```
+
+### **Frequência de quedas por tipo de classificaçao de chuva**
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(plotly)
+
+# Definindo a ordem de classificação
+ ordem_classificacao <- c("Sem chuva (i < 0.1)","Chuva Fraca (0.1 <= i < 5)", "Moderada (5 < i <= 25)", "Forte (25 < i <= 50)", "Muito Forte (i > 50)")
+ 
+dados_arvores$classificacao_intensidade_chuva_1_h <- factor(dados_arvores$classificacao_intensidade_chuva_1_h, levels = ordem_classificacao)
+
+  # Criação do gráfico
+  ggplotly(
+    ggplot(data = dados_arvores, aes(x = classificacao_intensidade_chuva_1_h)) +
+      geom_bar(fill = "royalblue") +
+      labs(title = "Quantidade de quedas por tipo de classificação de intensidade de chuva",
+           x = "Classificação intensidade da chuva",
+           y = "Quantidade",
+           caption = "Período: Maio/2015 a Janeiro/2024") +
+      theme_classic() +
+      theme(text = element_text(size = 12))
+  )
+```
+
+### **Estatística descritivas das variáveis numéricas de chuva**
+
+```{r}
+library(dplyr)
+library(DT)
+library(e1071)
+
+
+# Função para calcular a moda
+calc_moda <- function(x) {
+  ux <- unique(x)
+  ux[which.max(tabulate(match(x, ux)))]
+}
+
+# Função para calcular estatísticas descritivas
+
+calc_estatisticas <- function(x) {
+  c(
+    minima = round(min(x, na.rm = TRUE),2),
+    media = round(mean(x, na.rm = TRUE),2),
+    mediana = round(median(x, na.rm = TRUE),2),
+    moda = round(calc_moda(x),2),
+    Q1 = round(quantile(x, 0.25, na.rm = TRUE),2),
+    Q3 = round(quantile(x, 0.75, na.rm = TRUE),2),
+    maxima = round(max(x, na.rm = TRUE),2),
+    amplitude = round(max(x, na.rm = TRUE) - min(x, na.rm = TRUE),2),
+    variancia = round(var(x, na.rm = TRUE),2),
+    desvio_padrao = round(sd(x, na.rm = TRUE),2),
+    erro_padrao = round(sd(x, na.rm = TRUE) / sqrt(sum(!is.na(x))),2),
+    coef_variacao = round(sd(x, na.rm = TRUE) / mean(x, na.rm = TRUE),2),
+    assimetria <- round(skewness(x, na.rm = TRUE),2),
+    curtose <- round(kurtosis(x, na.rm = TRUE),2)
+    
+  )
+}
+
+   dados_chuva <- dplyr::select(dados_arvores, 17:21)
+   estatisticas_descritivas2 <- dados_chuva %>% summarise_all(calc_estatisticas) 
+   estatisticas_descritivas2$estatisticas<- c("minima","media","mediana","moda","Q1","Q3","maxima","amplitude","variancia","desvio_padrao","erro_padrao","coef_variacao","assimetria", "curtose")
+   estatisticas_descritivas2 <- dplyr::select(estatisticas_descritivas2,
+                                             estatisticas, everything())
+   datatable(estatisticas_descritivas2)
+
+```
+
+## row {.tabset .tabset-fade}
+
+### **Boxplot acumulado chuva 15 min**
+
+```{r}
+#Boxplot acumulado chuva 15 min
+library(ggplot2)
+library(plotly)
+library(dplyr)
+
+# Código para criar o boxplot
+
+# Adiciona uma coluna com os nomes abreviados dos meses e converte para fator na ordem correta
+dados_arvores <- dados_arvores %>%
+  mutate(mes_abrev = factor(month.abb[mes], levels = month.abb))
+ggplotly(
+ggplot(dados_arvores, aes(x=factor(mes_abrev), y=acumulado_chuva_15_min, fill=factor(mes_abrev))) +
+  geom_boxplot() +
+  labs(title="Boxplot do Acumulado de Chuva de 15 min por Mês",
+       x="Mês",
+       y="Acumulado de Chuva (15 min)") +
+  theme_classic()+
+  theme(text = element_text(size = 12))+
+  theme(legend.position = "none")
+)
+```
+
+### **Boxplot acumulado chuva 1 h**
+
+```{r}
+#"acumulado_chuva_1_h"
+library(ggplot2)
+library(plotly)
+library(dplyr)
+
+# Código para criar o boxplot
+
+# Adiciona uma coluna com os nomes abreviados dos meses e converte para fator na ordem correta
+dados_arvores <- dados_arvores %>%
+  mutate(mes_abrev = factor(month.abb[mes], levels = month.abb))
+ggplotly(
+ggplot(dados_arvores, aes(x=factor(mes_abrev), y=acumulado_chuva_1_h,fill=factor(mes_abrev))) +
+  geom_boxplot() +
+  labs(title="Boxplot do Acumulado de Chuva de 1 h por Mês",
+       x="Mês",
+       y="Acumulado de Chuva (1 hora)") +
+  theme_classic()+
+  theme(text = element_text(size = 12))+
+  theme(legend.position = "none")
+)
+```
+
+### **Boxplot acumulado chuva 4 h**
+
+```{r}
+#"acumulado_chuva_4_h"
+library(ggplot2)
+
+# Código para criar o boxplot
+
+# Adiciona uma coluna com os nomes abreviados dos meses e converte para fator na ordem correta
+dados_arvores <- dados_arvores %>%
+  mutate(mes_abrev = factor(month.abb[mes], levels = month.abb))
+
+ggplotly(
+ggplot(dados_arvores, aes(x=factor(mes_abrev), y=acumulado_chuva_4_h,fill=factor(mes_abrev))) +
+  geom_boxplot() +
+  labs(title="Boxplot do Acumulado de Chuva de 4 h por Mês",
+       x="Mês",
+       y="Acumulado de Chuva (4 hora)") +
+  theme_classic()+
+  theme(text = element_text(size = 12))+
+  theme(legend.position = "none")
+)
+```
+
+### **Boxplot acumulado chuva 24 h**
+
+```{r}
+#"acumulado_chuva_24_h"
+library(ggplot2)
+
+# Código para criar o boxplot
+
+# Adiciona uma coluna com os nomes abreviados dos meses e converte para fator na ordem correta
+dados_arvores <- dados_arvores %>%
+  mutate(mes_abrev = factor(month.abb[mes], levels = month.abb))
+
+ggplotly(
+ggplot(dados_arvores, aes(x=factor(mes_abrev), y=acumulado_chuva_24_h,fill=factor(mes_abrev))) +
+  geom_boxplot() +
+  labs(title="Boxplot do Acumulado de Chuva de 24 h por Mês",
+       x="Mês",
+       y="Acumulado de Chuva (24 hora)") +
+  theme_classic()+
+  theme(text = element_text(size = 12))+
+  theme(legend.position = "none")
+)
+```
+
+### **Boxplot acumulado chuva 96 h**
+
+```{r}
+#"acumulado_chuva_96_h"
+library(ggplot2)
+
+# Código para criar o boxplot
+
+# Adiciona uma coluna com os nomes abreviados dos meses e converte para fator na ordem correta
+dados_arvores <- dados_arvores %>%
+  mutate(mes_abrev = factor(month.abb[mes], levels = month.abb))
+
+ggplotly(
+ggplot(dados_arvores, aes(x=factor(mes_abrev), y=acumulado_chuva_96_h,fill=factor(mes_abrev))) +
+  geom_boxplot() +
+  labs(title="Boxplot do Acumulado de Chuva de 96 h por Mês",
+       x="Mês",
+       y="Acumulado de Chuva (96 hora)") +
+ theme_classic()+
+  theme(text = element_text(size = 12))+
+  theme(legend.position = "none")
+)
+```
+
+# Análise dos dados de vento {data-navmenu="Análise dos dados meteorológicos" data-icon="ion-flag"}
+
+## Row {.tabset .tabset-fade data-height="500"}
+
+### **Velocidade do vento m/s**
+
+```{r}
+library(ggplot2)
+library(plotly)
+#vento_velocidade_horaria_(m/s)_dia
+
+dados_arvores$vento_vel_horaria.m.s. <- round(dados_arvores$vento_vel_horaria.m.s.,2)
+
+  #Calculo da média
+media_vento_vel <- round(mean(dados_arvores$vento_vel_horaria.m.s.),2)
+
+ggplotly(
+ggplot(data = dados_arvores, aes(x = data_inicio, y = vento_vel_horaria.m.s.)) +
+    geom_line(color = "royalblue") +
+    geom_hline(yintercept = media_vento_vel, linetype = "dashed", color = "red") +
+    labs(title = "Velocidade do vento em m/s",
+         x = "Data",
+         y = "Vento m/s",
+         caption = paste("Período: Maio/2015 a Janeiro/2024\nMédia de Vento:", media_vento_vel)) +
+    theme_classic() +
+    theme(text = element_text(size = 12))
+)
+```
+
+### **Histograma de velocidade do vento m/s**
+
+```{r}
+library(ggplot2)
+library(plotly)
+#vento_velocidade_horaria_(m/s)_dia
+
+# Histograma com cores para diferentes categorias com sobreposição
+
+ggplotly(
+ggplot(dados_arvores, aes(x = vento_vel_horaria.m.s.)) +
+  geom_histogram(binwidth = 1, fill = "royalblue", color = "white") +
+  theme_classic() +
+  labs(title = "Histograma da Velocidade do Vento",
+       x = "Velocidade do Vento (m/s)",
+       y = "Frequência") +
+  theme(text = element_text(size = 12))
+)
+```
+
+### **Rajada de vento m/s**
+
+```{r}
+
+#Rajada de vento_velocidade_horaria_(m/s)_dia m/s
+
+dados_arvores$rajada_vento_maxima_.m.s. <- round(dados_arvores$rajada_vento_maxima_.m.s.,2)
+
+  #Calculo da média
+media_vento_rajada <- round(mean(dados_arvores$rajada_vento_maxima_.m.s.),2)
+ggplotly(
+ggplot(data = dados_arvores, aes(x = data_inicio, y = rajada_vento_maxima_.m.s.)) +
+    geom_line(color = "royalblue") +
+    geom_hline(yintercept = media_vento_rajada, linetype = "dashed", color = "red") +
+    labs(title = "Rajada de vento em m/s",
+         x = "Data",
+         y = "Vento m/s",
+         caption = paste("Período: Maio/2015 a Janeiro/2024 - Média de Vento:", media_vento_rajada)) +
+    theme_classic() +
+    theme(text = element_text(size = 12))
+)
+```
+
+### **Histograma de rajada do vento m/s**
+
+```{r}
+library(ggplot2)
+library(plotly)
+#vento_velocidade_horaria_(m/s)_dia
+
+# Histograma com cores para diferentes categorias com sobreposição
+
+ggplotly(
+ggplot(dados_arvores, aes(x = rajada_vento_maxima_.m.s.)) +
+  geom_histogram(binwidth = 1, fill = "royalblue", color = "white") +
+  theme_classic() +
+  labs(title = "Histograma de rajada de Vento",
+       x = "Velocidade da rajada de Vento (m/s)",
+       y = "Frequência") +
+  theme(text = element_text(size = 12))
+)
+```
+
+### **Frequência de quedas por tipo de classificação do vento**
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(plotly)
+
+# Adiciona a estação do ano como fator na ordem correta
+  dados_arvores <- dados_arvores %>%
+    mutate(vento_escala_Beaufort = factor(vento_escala_Beaufort, levels = c('Calmaria (v < 0.51)','Bafagem (0.51 <= v < 1.54)','Aragem (1.54 <= v < 3.08)','Fraco (3.08 <= v < 5.14)','Moderado (5.14 <= v < 8.22)','Fresco (8.22 <= v < 10.79)','Muito Fresco (10.79 <= v < 13.88)','Forte (13.88 <= v < 16.96)','Muito Forte (16.96 <= v < 20.56)', 'Duro (20.56 <= v < 24.16)','Muito Duro (24.16 <= v < 28.16)','Tempestade (28.16 <= v < 32.38)', 'Furacão (v >= 32.38)')))
+
+  
+  # Criação do gráfico
+  ggplotly(
+    ggplot(data = dados_arvores) +
+      geom_bar(aes(x = vento_escala_Beaufort), fill= "royalblue") +
+      labs(title = "Quantidade de quedas por tipo de classificaçao de vento - escala Beaufort",
+           x = "Classificação intensidade do vento",
+           y = "Quantidade",
+           caption = "Período: Maio/2015 a Jan/2024") +
+      theme_classic()+
+      theme(text = element_text(size = 10))
+
+  )
+```
+
+### **Frequência de quedas por tipo de classificação da direção do vento**
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(plotly)
+
+dados_arvores <- dados_arvores %>%
+    mutate(classificacao_direcao_vento = factor(classificacao_direcao_vento, levels = c("Norte", "Nordeste", "Leste", "Sudeste", "Sul", "Sudoeste", "Oeste", "Noroeste")))
+
+  # Criação do gráfico
+  ggplotly(
+    ggplot(data = dados_arvores) +
+      geom_bar(aes(x = classificacao_direcao_vento), fill= "royalblue") +
+      labs(title = "Quantidade de quedas por tipo de classificaçao da direção do vento",
+           x = "Classificação da direção do vento",
+           y = "Quantidade",
+           caption = "Período: Maio/2015 a Janeiro/2024") +
+      theme_classic()+
+      theme(text = element_text(size = 12)))
+```
+
+### **Rosa dos ventos**
+
+```{r}
+library(openair)
+
+windRose(dados_arvores, 
+           ws = "vento_vel_horaria.m.s.", # Coluna da velocidade do vento
+           wd = "vento_dir_h_gr", # Coluna da direção do vento
+           main = "Rosa dos Ventos", # Título do gráfico
+)
+```
+
+### **Estatística descritivas das variáveis numéricas de vento**
+
+```{r}
+library(dplyr)
+library(DT)
+library(e1071)
+
+
+# Função para calcular a moda
+calc_moda <- function(x) {
+  ux <- unique(x)
+  ux[which.max(tabulate(match(x, ux)))]
+}
+
+# Função para calcular estatísticas descritivas
+
+calc_estatisticas <- function(x) {
+  c(
+    minima = round(min(x, na.rm = TRUE),2),
+    media = round(mean(x, na.rm = TRUE),2),
+    mediana = round(median(x, na.rm = TRUE),2),
+    moda = round(calc_moda(x),2),
+    Q1 = round(quantile(x, 0.25, na.rm = TRUE),2),
+    Q3 = round(quantile(x, 0.75, na.rm = TRUE),2),
+    maxima = round(max(x, na.rm = TRUE),2),
+    amplitude = round(max(x, na.rm = TRUE) - min(x, na.rm = TRUE),2),
+    variancia = round(var(x, na.rm = TRUE),2),
+    desvio_padrao = round(sd(x, na.rm = TRUE),2),
+    erro_padrao = round(sd(x, na.rm = TRUE) / sqrt(sum(!is.na(x))),2),
+    coef_variacao = round(sd(x, na.rm = TRUE) / mean(x, na.rm = TRUE),2),
+    assimetria <- round(skewness(x, na.rm = TRUE),2),
+    curtose <- round(kurtosis(x, na.rm = TRUE),2)
+    
+  )
+}
+
+   dados_chuva <- dplyr::select(dados_arvores, rajada_vento_maxima_.m.s.,vento_vel_horaria.m.s.)
+   estatisticas_descritivas3 <- dados_chuva %>% summarise_all(calc_estatisticas) 
+   estatisticas_descritivas3$estatisticas<- c("minima","media","mediana","moda","Q1","Q3","maxima","amplitude","variancia","desvio_padrao","erro_padrao","coef_variacao","assimetria", "curtose")
+   estatisticas_descritivas3 <- dplyr::select(estatisticas_descritivas3,
+                                             estatisticas, everything())
+   datatable(estatisticas_descritivas3)
+```
+
+## row {.tabset .tabset-fade}
+
+### **Boxplot vento velocidade m/s**
+
+```{r}
+#"vento velocidade m/s"
+library(ggplot2)
+
+# Código para criar o boxplot
+
+# Adiciona uma coluna com os nomes abreviados dos meses e converte para fator na ordem correta
+dados_arvores <- dados_arvores %>%
+  mutate(mes_abrev = factor(month.abb[mes], levels = month.abb))
+
+ggplotly(
+ggplot(dados_arvores, aes(x=factor(mes_abrev), y=vento_vel_horaria.m.s., fill=factor(mes_abrev))) +
+  geom_boxplot() +
+  labs(title="Boxplot de velocidade do vento m/s por mês",
+       x="Mês",
+       y="Vento velociade m/s") +
+   theme_classic()+
+  theme(text = element_text(size = 12))+
+  theme(legend.position = "none")
+)
+```
+
+### **Boxplot de rajada de vento m/s**
+
+```{r}
+library(ggplot2)
+
+# Código para criar o boxplot
+
+# Adiciona uma coluna com os nomes abreviados dos meses e converte para fator na ordem correta
+dados_arvores <- dados_arvores %>%
+  mutate(mes_abrev = factor(month.abb[mes], levels = month.abb))
+
+ggplotly(
+ggplot(dados_arvores, aes(x=factor(mes_abrev), y=rajada_vento_maxima_.m.s., fill=factor(mes))) +
+  geom_boxplot() +
+  labs(title="Boxplot de rajada de vento m/s por mês",
+       x="Mês",
+       y="Rajada de vento m/s") +
+  theme_classic()+
+  theme(text = element_text(size = 12))+
+  theme(legend.position = "none")
+)
+```
+
+# Mapas temáticos {data-navmenu="Análise  espacial" data-navmenu-icon="ion-android-globe" data-icon="ion-map"}
+
+## row {.tabset .tabset-fade data-height="1000"}
+
+### **Mapa de localização das ocorrências por ano**
+
+```{r}
+library(mapview)
+library(RColorBrewer)
+library(utils)
+dados_arvores_sf <- st_as_sf(dados_arvores, coords = c("longitude", "latitude"), crs = 4326)
+m<- mapview(dados_arvores_sf, zcol = c("ano"), col.regions=brewer.pal(10, "Spectral"))
+m
+```
+
+### **Mapa de quantidade de quedas por bairros**
+
+```{r}
+library(sf)
+library(RColorBrewer)
+
+# Criar um objeto sf com as coordenadas das árvores (assumindo que a coluna que contém as coordenadas é chamada "longitude" e "latitude")
+  
+dados_arvores_sf <- st_as_sf(dados_arvores, coords = c("longitude", "latitude"), crs = 4326)
+
+intersecoes2 <- st_intersects(bairros_transf,dados_arvores_sf)
+contagem2 <- sapply(intersecoes2, length)
+bairros_transf$ContagemQuedas <- contagem2
+
+mapview(bairros_transf,map.types = c("CartoDB.Positron", "OpenStreetMap", "OpenStreetMap.HOT", "OpenTopoMap", "Esri.WorldTopoMap", "Esri.WorldImagery", "Esri.WorldGrayCanvas"), zcol = "ContagemQuedas",label="nome")
+
+
+```
+
+### **Mapa de quantidade de quedas por AP**
+
+```{r}
+intersecoes3 <- st_intersects(limite_AP_transf,dados_arvores_sf)
+contagem3 <- sapply(intersecoes3, length)
+limite_AP_transf$ContagemQuedas <- contagem3
+
+mapview(limite_AP_transf,map.types = c("CartoDB.Positron", "OpenStreetMap", "OpenStreetMap.HOT", "OpenTopoMap", "Esri.WorldTopoMap", "Esri.WorldImagery", "Esri.WorldGrayCanvas"), zcol = "ContagemQuedas",label="codap")
+#Mudar o shape para ap e fazer a contagem
+
+```
+
+### **Mapa de quantidade de quedas por macrobacia e sub-bacia**
+
+```{r}
+library(mapview)
+intersecoes4 <- st_intersects(subbacia_transf,dados_arvores_sf)
+contagem4 <- sapply(intersecoes4, length)
+subbacia_transf$ContagemQuedas <- contagem4
+
+intersecoes5 <- st_intersects(macrobacia_transf,dados_arvores_sf)
+contagem5 <- sapply(intersecoes5, length)
+macrobacia_transf$ContagemQuedas <- contagem5
+
+mapsubbacia<- mapview(subbacia_transf,map.types = c("CartoDB.Positron", "OpenStreetMap", "OpenStreetMap.HOT", "OpenTopoMap", "Esri.WorldTopoMap", "Esri.WorldImagery", "Esri.WorldGrayCanvas"), zcol = "ContagemQuedas",label="shi_nm")
+
+mapmacrobacia<- mapview(macrobacia_transf,map.types = c("CartoDB.Positron", "OpenStreetMap", "OpenStreetMap.HOT", "OpenTopoMap", "Esri.WorldTopoMap", "Esri.WorldImagery", "Esri.WorldGrayCanvas"), zcol = "ContagemQuedas",label="shi_nm_mac")
+
+m <- mapsubbacia + mapmacrobacia
+m
+
+```
+
+# Intensidade - Efeitos de primeira ordem {data-navmenu="Análise espacial" data-icon="ion-grid"}
+
+## row {.tabset .tabset-fade data-height="1000"}
+
+### **Intensidade - Contagem de Quadrats**
+
+Numa visão estatística, processos pontuais são definidos como um conjunto de pontos irregularmente distribuídos em um terreno, cuja localização foi gerada por um mecanismo estocástico. Para sua caracterização, este processo estocástico pode ser descrito em termos dos efeitos de primeira ordem e efeitos de segunda ordem.
+
+Efeitos de primeira ordem: os efeitos de primeira ordem, considerados globais ou de larga escala, correspondem a variações no valor médio do processo no espaço. Neste caso, estamos interessados na intensidade do processo, isto é, no número de eventos por unidade de área.
+
+```{r}
+
+#Densidade de pontos dentro de cada quadrat
+#Contagem de quadrats
+Q <- quadratcount(dados_arvores_proj.ppp, nx=12, ny=9)
+plot(Q)
+```
+
+### **Teste qui-quadrado da contagem de quadrat**
+
+O p-valor está bem abaixo de 0,05 (ou 2.2e-16 nesse caso), o que significa que há uma diferença estatisticamente significativa entre a distribuição esperada (ou seja, CSR) e a distribuição observada. Podemos, portanto, rejeitar a hipótese nula de que nossos dados pontuais foram gerados sob completa aleatoriedade espacial e confirmar que nosso padrão de pontos não foi gerado de forma aleatória.
+
+```{r}
+teste_qui_quadrad = quadrat.test(dados_arvores_proj.ppp, nx= 12, ny=9)
+teste_qui_quadrad
+
+```
+
+### **Intensidade - Densidade**
+
+Os valores de densidade são relatados como o número de pontos (quedas) por unidade de área, por quadrat. A unidade de dimensão comprimento é extraída do sistema de coordenadas associado à camada de ponto. Se a unidade de comprimento estiver em metros, então a densidade é relatada como pontos por metro quadrado. Uma unidade de comprimento tão pequena não é prática nesta escala de análise. Portanto, é desejável redimensionar os objetos espaciais para uma unidade de comprimento maior, como o quilômetro(Baddeley et. al, 2015).
+
+```{r}
+# Intensidade
+# Intensidade média em cada quadrante sem alterar a escala
+
+#Densidade de pontos dentro de cada quadrat
+#Q.d <- intensity(Q)
+
+L<-intensity(Q,image=TRUE)
+
+# Redimensionar os objetos espaciais para quilômetros
+dados_arvores_proj.km <- rescale(dados_arvores_proj.ppp, 1000, "km")
+mapa_rio.km <- rescale(mapa_rio.owin, 1000, "km")
+
+# Calcular a densidade para cada quadrat (em contagens por km²)
+Q <- quadratcount(dados_arvores_proj.km, nx=12, ny=9)
+
+# Calcular a imagem de intensidade
+Q.i <- intensity(Q, image=TRUE)
+
+# Plotar a imagem de densidade
+plot(Q.i, main=NULL, las=1) # Plotar o raster de densidade
+
+```
+
+### **Mapa de pontos quentes - Hotspots**
+
+```{r}
+denRed.km2 <- density(dados_arvores_proj.km, bw.ppl, ns=16)
+plot(denRed.km2)
+```
+
